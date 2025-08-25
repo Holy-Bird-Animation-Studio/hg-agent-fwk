@@ -28,6 +28,7 @@ from .models import (
     AgentStatus,
     AgentCapability
 )
+from .framework_manager import FrameworkManager, FrameworkVersion, UpdateResult
 
 
 class AgentConfig(BaseModel):
@@ -87,6 +88,9 @@ class BaseAgent(ABC):
         # Register capabilities
         self.capabilities: List[AgentCapability] = []
         self._register_base_capabilities()
+        
+        # Framework manager for self-update capabilities
+        self.framework_manager = FrameworkManager(config)
     
     def _create_app(self) -> FastAPI:
         """Create and configure FastAPI application"""
@@ -171,6 +175,36 @@ class BaseAgent(ABC):
         async def get_status():
             """Detailed status endpoint"""
             return await self._get_detailed_status()
+        
+        # Framework management endpoints
+        @app.get("/fwk/version")
+        async def get_framework_version():
+            """Get current framework version"""
+            return {
+                "current_version": self.framework_manager.get_current_version(),
+                "framework_version": self.config.framework_version,
+                "agent_version": self.config.version
+            }
+        
+        @app.get("/fwk/available", response_model=List[FrameworkVersion])
+        async def get_available_versions():
+            """Get available framework versions"""
+            return await self.framework_manager.get_available_versions()
+        
+        @app.post("/fwk/update", response_model=UpdateResult)
+        async def update_framework(target_version: str, run_tests: bool = True):
+            """Update framework to target version"""
+            return await self.framework_manager.update_framework(target_version, run_tests)
+        
+        @app.post("/fwk/clone-test")
+        async def clone_for_testing(clone_name: Optional[str] = None):
+            """Create a test clone of this agent"""
+            clone_path = await self.framework_manager.create_test_clone(clone_name)
+            return {
+                "success": True,
+                "clone_path": str(clone_path),
+                "clone_name": clone_path.name
+            }
     
     def _register_base_capabilities(self):
         """Register base framework capabilities"""
@@ -189,6 +223,16 @@ class BaseAgent(ABC):
                 name="status_reporting",
                 version="1.0.0", 
                 description="Detailed agent introspection"
+            ),
+            AgentCapability(
+                name="framework_management",
+                version="1.1.0",
+                description="Self-update and framework version management"
+            ),
+            AgentCapability(
+                name="test_cloning",
+                version="1.1.0", 
+                description="Create test clones for safe framework updates"
             )
         ])
     

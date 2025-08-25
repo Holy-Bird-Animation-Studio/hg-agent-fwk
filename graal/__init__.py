@@ -10,6 +10,7 @@ __email__ = "contact@holygraal.io"
 from .base import BaseAgent, AgentConfig
 from .models import HealthResponse, ChatRequest, ChatResponse, AgentStatus
 from .llm import LLMClient, LLMConfig, LLMProvider, BaseLLMAgent
+from .framework_manager import FrameworkManager, FrameworkVersion, UpdateResult
 
 __all__ = [
     "BaseAgent",
@@ -22,4 +23,7 @@ __all__ = [
     "LLMConfig",
     "LLMProvider", 
     "BaseLLMAgent",
+    "FrameworkManager",
+    "FrameworkVersion",
+    "UpdateResult",
 ]
