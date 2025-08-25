@@ -16,6 +16,7 @@ from typing import Dict, Any, List, Optional, Tuple
 
 import httpx
 from pydantic import BaseModel, Field
+from .migration_manager import MigrationManager
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,12 @@ class UpdateResult(BaseModel):
     test_results: Optional[Dict[str, Any]] = Field(None, description="Test execution results")
     rollback_available: bool = Field(default=False, description="Can rollback to previous version?")
     error_message: Optional[str] = Field(None, description="Error message if update failed")
+    
+    # Migration-specific fields
+    migration_applied: Optional[bool] = Field(None, description="Was code migration applied?")
+    migration_changes: Optional[List[Dict[str, Any]]] = Field(None, description="List of migration changes applied")
+    breaking_changes: Optional[List[str]] = Field(None, description="List of breaking changes in this update")
+    migration_message: Optional[str] = Field(None, description="Migration status message")
 
 
 class FrameworkManager:
@@ -60,6 +67,9 @@ class FrameworkManager:
         self.agent_root = Path(os.getcwd())
         self.framework_lock_file = self.agent_root / "framework.lock"
         self.backup_dir = self.agent_root / ".framework_backups"
+        
+        # Migration manager for code updates
+        self.migration_manager = MigrationManager(self.agent_root)
         
         # Ensure backup directory exists
         self.backup_dir.mkdir(exist_ok=True)
@@ -136,6 +146,12 @@ class FrameworkManager:
         
         logger.info(f"🔄 Starting framework update: {current_version} → {target_clean}")
         
+        # Check if migration is needed
+        migration_info = self.migration_manager.get_migration_info(current_version, target_clean)
+        if migration_info["migration_available"] and migration_info["has_code_changes"]:
+            logger.info(f"🔧 Migration required with {len(migration_info['migration_steps'])} code changes")
+            logger.info(f"Breaking changes: {migration_info['breaking_changes']}")
+        
         # Create backup before update
         backup_path = await self._create_backup(current_version)
         
@@ -145,6 +161,9 @@ class FrameworkManager:
             
             # Reinstall framework with new version
             await self._reinstall_framework()
+            
+            # Apply code migrations if needed
+            migration_result = await self.migration_manager.apply_migration(current_version, target_clean)
             
             # Update framework.lock
             self.framework_lock_file.write_text(target_tag + "\n")
@@ -168,13 +187,29 @@ class FrameworkManager:
             
             logger.info(f"✅ Framework updated successfully: {current_version} → {target_clean}")
             
-            return UpdateResult(
+            # Include migration results in response
+            result = UpdateResult(
                 success=True,
                 from_version=current_version,
                 to_version=target_clean,
                 test_results=test_results,
                 rollback_available=True
             )
+            
+            # Add migration info to result
+            if migration_result:
+                result_dict = result.dict()
+                result_dict.update({
+                    "migration_applied": migration_result.get("migration_required", False),
+                    "migration_changes": migration_result.get("changes_applied", []),
+                    "breaking_changes": migration_result.get("breaking_changes", []),
+                    "migration_message": migration_result.get("message", "")
+                })
+                
+                # Convert back to UpdateResult with additional fields
+                return UpdateResult(**{k: v for k, v in result_dict.items() if k in UpdateResult.__fields__})
+            
+            return result
             
         except Exception as e:
             logger.error(f"❌ Framework update failed: {e}")

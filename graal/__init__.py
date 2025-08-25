@@ -11,6 +11,7 @@ from .base import BaseAgent, AgentConfig
 from .models import HealthResponse, ChatRequest, ChatResponse, AgentStatus
 from .llm import LLMClient, LLMConfig, LLMProvider, BaseLLMAgent
 from .framework_manager import FrameworkManager, FrameworkVersion, UpdateResult
+from .migration_manager import MigrationManager, FrameworkMigration, MigrationStep
 
 __all__ = [
     "BaseAgent",
@@ -26,4 +27,7 @@ __all__ = [
     "FrameworkManager",
     "FrameworkVersion",
     "UpdateResult",
+    "MigrationManager",
+    "FrameworkMigration", 
+    "MigrationStep",
 ]

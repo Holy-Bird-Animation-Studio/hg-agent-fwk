@@ -205,6 +205,38 @@ class BaseAgent(ABC):
                 "clone_path": str(clone_path),
                 "clone_name": clone_path.name
             }
+        
+        @app.get("/fwk/migration-info")
+        async def get_migration_info(target_version: str):
+            """Get migration information for target version without applying it"""
+            current_version = self.framework_manager.get_current_version()
+            return self.framework_manager.migration_manager.get_migration_info(current_version, target_version.lstrip('v'))
+        
+        @app.get("/fwk/changelog")
+        async def get_framework_changelog():
+            """Get framework changelog with breaking changes info"""
+            current_version = self.framework_manager.get_current_version()
+            available_versions = await self.framework_manager.get_available_versions()
+            
+            changelog_info = []
+            for version in available_versions:
+                migration_info = self.framework_manager.migration_manager.get_migration_info(
+                    current_version, version.version
+                )
+                if migration_info["migration_available"]:
+                    changelog_info.append({
+                        "version": version.version,
+                        "tag": version.tag,
+                        "has_breaking_changes": migration_info["has_code_changes"],
+                        "breaking_changes": migration_info.get("breaking_changes", []),
+                        "changelog": migration_info.get("changelog", ""),
+                        "migration_steps": len(migration_info.get("migration_steps", []))
+                    })
+            
+            return {
+                "current_version": current_version,
+                "available_updates": changelog_info
+            }
     
     def _register_base_capabilities(self):
         """Register base framework capabilities"""
